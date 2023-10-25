@@ -1,21 +1,45 @@
 import React, {useEffect, useState} from 'react';
-import Categories from "./Categories";
+import Categories from "../component/Categories";
 import axios from 'axios'
 import {Models} from "../models";
-import {useTheme} from "./ThemeContext";
+import {useTheme} from "../component/ThemeContext";
 import { useTranslation } from 'react-i18next';
+import ReactPaginate from 'react-paginate';
+import SearchInput from "../component/SearchInput";
 
 const Track = () => {
+    const [openArticle, setOpenArticle] = useState<number | null>(null);
     const [error, setError] = useState<Error | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
     const [items, setItems] = useState<Models[] | null>();
     const [value, setValue] = useState("");
-    const { theme, toggleTheme } = useTheme();
+    const {theme} = useTheme();
     const { t, i18n } = useTranslation();
+    const [currentPage, setCurrentPage] = useState(0);
+    const itemsPerPage = 6;
+    const [searchQuery, setSearchQuery] = useState(''); // Стейт для запроса поиска
 
-    const filteredCountries = (items || []).filter((item => {
-        return item.artistName.toLowerCase().includes(value.toLowerCase())
-    }));
+
+    const filteredCountries = (items || []).filter((item) => {
+        return item.artistName.toLowerCase().includes(value.toLowerCase());
+    });
+
+// Вычислите начальный и конечный индексы для текущей страницы
+    const startIndex = currentPage * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+
+// Фильтруйте элементы на основе текущей страницы
+    const currentItems = filteredCountries.slice(startIndex, endIndex);
+
+    const toggleArticle = (index: number) => {
+        if (openArticle === index) {
+            // Закрываем текущий article
+            setOpenArticle(null);
+        } else {
+            // Открываем новый article
+            setOpenArticle(index);
+        }
+    };
 
     function TimeTrackMinutes(ms:number) {
         const s = ms / 1000;
@@ -41,10 +65,36 @@ const Track = () => {
         }
     };
 
-    // useEffect, следящий за изменением языка
+    // Функция для выполнения поиска на основе параметров URL
+    const performSearchFromURL = () => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const query = searchParams.get('query');
+        if (query) {
+            setValue(query);
+        }
+    };
+
+    // useEffect для выполнения поиска при загрузке страницы
     useEffect(() => {
         fetchData(i18n.language); // Вызываем fetchData с текущим языком
+        performSearchFromURL(); // Вызываем performSearchFromURL при загрузке страницы
     }, [i18n.language]);
+
+    // useEffect для выполнения поиска при изменении параметров URL
+    useEffect(() => {
+        performSearchFromURL(); // Вызываем performSearchFromURL при изменении URL
+    }, [window.location.search]);
+
+    // Функция для выполнения поиска
+    const handleSearch = (query: string) => {
+        const searchParams = new URLSearchParams(window.location.search);
+        searchParams.set('query', query);
+        window.history.pushState({}, '', `?${searchParams.toString()}`);
+
+        setSearchQuery(query); // Обновляем запрос поиска
+        setCurrentPage(0); // Сбрасываем текущую страницу при новом поиске
+        setValue(query);
+    };
 
     if (error) {
         return <div>Ошибка: {error.message}</div>;
@@ -54,16 +104,11 @@ const Track = () => {
         console.log(filteredCountries)
         return (
             <div className='pt-20 pb-4 px-0'>
-                <input
-                    type="search"
-                    placeholder="Artist..."
-                    onChange={(event) => setValue(event.target.value)}
-                    className="input rounded-3xl h-11 w-72 px-6 py-2.5 text-base mb-3.5"
-                />
+                <SearchInput onSearch={handleSearch}/>
                 <Categories/>
-                {filteredCountries.map((item, index) => (
-                    <article className={`article1 p-1.5 border border-solid border-black max-w-none mb-1.5 overflow-y-hidden h-40 ${theme === 'dark' ? 'dark-article' : ''}`} key={index}>
-                        <img className='img' src={item.artworkUrl100} alt='error'/>
+                {currentItems.map((item, index) => (
+                    <article className={`article1  ${openArticle === index ? 'expanded' : ''} ${theme === 'dark' ? 'dark-article' : ''}`} key={index} >
+                        <img className='img' src={item.artworkUrl100} alt='img'/>
                         <p className={`p1 ${theme === 'dark' ? 'dark-p' : ''}`}>{item.artistName}</p>
                         <p className={`p2 ${theme === 'dark' ? 'dark-p' : ''}`}>{item.trackName}</p>
                         <p className={`p3 ${theme === 'dark' ? 'dark-p' : ''}`}>{item.collectionName}</p>
@@ -78,10 +123,20 @@ const Track = () => {
                             <p className={`${theme === 'dark' ? 'dark-p' : ''}`}><b className={`${theme === 'dark' ? 'dark-b' : ''}`}>{t('track_price')}: </b>{item.trackPrice} USD</p>
                             </div>
                         </div>
+                        <button className={`arrow-btn ${openArticle === index ? 'active' : ''} ${theme === 'dark' ? 'dark-arrow-btn' : ''}`} onClick={() => toggleArticle(index)}/>
                     </article>
-                ))}</div>
+                ))}
+                    <ReactPaginate
+                        previousLabel={'<'}
+                        nextLabel={'>'}
+                        pageCount={Math.ceil(filteredCountries.length / itemsPerPage)}
+                        onPageChange={({ selected }) => setCurrentPage(selected)}
+                        containerClassName={`pagination ${theme === 'dark' ? 'dark-pagination' : ''}`}
+                        activeClassName={'active'}
+                    />
+                </div>
         );
     }
 }
 
-export default Track;
+export {Track};
